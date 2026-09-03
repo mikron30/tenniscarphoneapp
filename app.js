@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  const APP_VERSION = "V2 VOICE DEBUG";
   const COMMAND_WINDOW_MS = 7000;
   const STATUS_POLL_MS = 5000;
   const DEFAULT_PI_URL = "http://mikipi.local:5000";
@@ -8,13 +9,29 @@
 
   const WAKE_PHRASES = [
     "מכונית טניס תפעלי",
-    "מכונית טניס תפעילי"
+    "מכונית טניס תפעילי",
+    "מכונית טניס תפעל",
+    "מכונית טניס תפעיל",
+    "מכונית טניס הפעלי",
+    "מכונית טניס תתחילי"
   ];
 
   const COMMAND_PHRASES = {
-    FETCH: ["תביא כדור", "תביאי כדור", "הביאי כדור", "תביא כדור טניס"],
+    FETCH: [
+      "תביא כדור",
+      "תביאי כדור",
+      "הביאי כדור",
+      "תביא כדור טניס",
+      "תביאי כדור טניס"
+    ],
     STOP: ["עצור", "עצרי", "סטופ"],
-    HOME: ["חזור למקום", "תחזור למקום", "חזרי למקום", "חזרה למקום"]
+    HOME: [
+      "חזור למקום",
+      "תחזור למקום",
+      "חזרי למקום",
+      "חזרה למקום",
+      "תחזרי למקום"
+    ]
   };
 
   const els = {
@@ -41,6 +58,7 @@
   let restartTimer = null;
   let audioContext = null;
   let connectionCheckRunning = false;
+  let wakeTriggeredAt = 0;
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -59,18 +77,59 @@
     return phrases.some((phrase) => normalizedText.includes(normalizeText(phrase)));
   }
 
+  function containsAny(text, values) {
+    const normalized = normalizeText(text);
+    return values.some((value) => normalized.includes(normalizeText(value)));
+  }
+
+  function matchesWakePhrase(text) {
+    if (phraseMatches(text, WAKE_PHRASES)) return true;
+
+    // Hebrew speech recognition often returns a grammatically different
+    // inflection than the exact phrase that was spoken. Keep the wake phrase
+    // semantically strict (car + tennis + activation), but tolerate those
+    // normal recognition variants.
+    const hasCar = containsAny(text, ["מכונית", "מכונת", "מכונה"]);
+    const hasTennis = containsAny(text, ["טניס"]);
+    const hasActivation = containsAny(text, [
+      "תפעלי",
+      "תפעילי",
+      "תפעל",
+      "תפעיל",
+      "הפעלי",
+      "תתחילי",
+      "תתחיל"
+    ]);
+
+    return hasCar && hasTennis && hasActivation;
+  }
+
   function detectCommand(text) {
+    if (phraseMatches(text, COMMAND_PHRASES.STOP)) return "STOP";
+
+    const normalized = normalizeText(text);
+
+    // FETCH: require both the action and the word ball, so ordinary tennis
+    // conversation does not accidentally trigger the car.
+    const hasBall = normalized.includes("כדור");
+    const hasFetchVerb = containsAny(normalized, ["תביא", "תביאי", "הביאי", "הבא"]);
+    if (hasBall && hasFetchVerb) return "FETCH";
+
+    // HOME: require both a return word and place/home word.
+    const hasPlace = containsAny(normalized, ["מקום", "הביתה", "בית"]);
+    const hasReturnVerb = containsAny(normalized, ["חזור", "תחזור", "תחזרי", "חזרי", "חזרה"]);
+    if (hasPlace && hasReturnVerb) return "HOME";
+
     for (const [command, phrases] of Object.entries(COMMAND_PHRASES)) {
       if (phraseMatches(text, phrases)) return command;
     }
+
     return null;
   }
 
   function getPiUrl() {
     let saved = String(localStorage.getItem("tennisCarPiUrl") || "").trim().replace(/\/+$/, "");
 
-    // Migrate phones that opened the first version of the PWA, whose default
-    // hostname was raspberrypi.local. A manually entered address is preserved.
     if (!saved || saved.toLowerCase() === OLD_DEFAULT_PI_URL.toLowerCase()) {
       saved = DEFAULT_PI_URL;
       localStorage.setItem("tennisCarPiUrl", saved);
@@ -109,13 +168,24 @@
   }
 
   function enterCommandMode() {
+    if (Date.now() - wakeTriggeredAt < 800) return;
+    wakeTriggeredAt = Date.now();
+
     appMode = "command";
     commandDeadline = Date.now() + COMMAND_WINDOW_MS;
     setModeBadge("ממתין לפקודה", "command");
-    els.mainStatus.textContent = "דבר עכשיו";
+    els.mainStatus.textContent = "✅ שמעתי את משפט ההפעלה — דבר אחרי הביפ";
     els.instruction.textContent = "תביא כדור • עצור • חזור למקום";
     els.countdown.classList.remove("hidden");
     beep(880, 100);
+
+    // Start the command window with a fresh recognition session. This avoids
+    // the tail of the wake phrase being interpreted as the command.
+    if (recognitionRunning && recognition) {
+      setTimeout(() => {
+        try { recognition.abort(); } catch (_) {}
+      }, 120);
+    }
 
     if (commandTimer) clearInterval(commandTimer);
     commandTimer = setInterval(() => {
@@ -159,10 +229,10 @@
 
   function scheduleRecognitionRestart(delayMs = 250) {
     clearTimeout(restartTimer);
-    if (!listeningWanted || recognitionRunning || !recognition) return;
+    if (!listeningWanted || recognitionRunning || !recognition || document.hidden) return;
 
     restartTimer = setTimeout(() => {
-      if (!listeningWanted || recognitionRunning) return;
+      if (!listeningWanted || recognitionRunning || document.hidden) return;
       try {
         recognition.start();
       } catch (_) {
@@ -171,69 +241,115 @@
     }, delayMs);
   }
 
+  function collectAlternatives(result) {
+    const alternatives = [];
+    for (let i = 0; i < result.length; i += 1) {
+      const transcript = result[i]?.transcript?.trim();
+      if (transcript && !alternatives.includes(transcript)) alternatives.push(transcript);
+    }
+    return alternatives;
+  }
+
   function createRecognition() {
     if (!SpeechRecognition) return null;
 
     const r = new SpeechRecognition();
     r.lang = "he-IL";
-    r.continuous = false;
-    r.interimResults = false;
-    r.maxAlternatives = 3;
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 5;
 
     r.onstart = () => {
       recognitionRunning = true;
-      if (appMode === "wake") showWakeMode();
+      if (appMode === "wake") showWakeMode("🎤 המיקרופון פעיל — אני מאזין");
+    };
+
+    r.onaudiostart = () => {
+      if (listeningWanted) setModeBadge("מיקרופון פעיל", "listening");
+    };
+
+    r.onsoundstart = () => {
+      if (listeningWanted) els.mainStatus.textContent = "🔊 שומע קול...";
+    };
+
+    r.onspeechstart = () => {
+      if (listeningWanted) els.mainStatus.textContent = "🗣️ מזהה דיבור...";
     };
 
     r.onresult = (event) => {
-      const result = event.results[event.results.length - 1];
-      const alternatives = [];
+      for (let resultIndex = event.resultIndex; resultIndex < event.results.length; resultIndex += 1) {
+        const result = event.results[resultIndex];
+        const alternatives = collectAlternatives(result);
+        if (!alternatives.length) continue;
 
-      for (let i = 0; i < result.length; i += 1) {
-        if (result[i]?.transcript) alternatives.push(result[i].transcript.trim());
-      }
+        const prefix = result.isFinal ? "" : "… ";
+        els.heardText.textContent = `${prefix}${alternatives.join(" / ")}`;
 
-      els.heardText.textContent = alternatives.join(" / ") || "—";
-
-      if (appMode === "wake") {
-        if (alternatives.some((text) => phraseMatches(text, WAKE_PHRASES))) {
-          enterCommandMode();
+        if (appMode === "wake") {
+          // Wake phrase may be acted on even from an interim transcript. This
+          // makes activation much faster and avoids waiting for Chrome to end
+          // the utterance before opening the command window.
+          if (alternatives.some(matchesWakePhrase)) {
+            enterCommandMode();
+            return;
+          }
+          continue;
         }
+
+        if (Date.now() > commandDeadline) {
+          showWakeMode("חלון הפקודה הסתיים");
+          return;
+        }
+
+        // Actual car commands are executed only on FINAL recognition results.
+        // That prevents an unstable interim transcript from moving the car.
+        if (!result.isFinal) continue;
+
+        let command = null;
+        for (const text of alternatives) {
+          command = detectCommand(text);
+          if (command) break;
+        }
+
+        if (!command) {
+          els.mainStatus.textContent = "שמעתי, אבל לא זיהיתי פקודה — נסה שוב";
+          els.instruction.textContent = "תביא כדור • עצור • חזור למקום";
+          beep(430, 80);
+          continue;
+        }
+
+        executeVoiceCommand(command);
         return;
       }
+    };
 
-      if (Date.now() > commandDeadline) {
-        showWakeMode("חלון הפקודה הסתיים");
-        return;
-      }
-
-      let command = null;
-      for (const text of alternatives) {
-        command = detectCommand(text);
-        if (command) break;
-      }
-
-      if (!command) {
-        els.mainStatus.textContent = "לא הבנתי — נסה שוב";
-        els.instruction.textContent = "תביא כדור • עצור • חזור למקום";
-        beep(430, 80);
-        return;
-      }
-
-      executeVoiceCommand(command);
+    r.onnomatch = () => {
+      els.mainStatus.textContent = "שמעתי קול אבל לא הצלחתי לזהות מילים";
     };
 
     r.onerror = (event) => {
       const code = event.error || "unknown";
-      if (code === "no-speech" || code === "aborted") return;
+
+      if (code === "no-speech") {
+        if (listeningWanted) els.mainStatus.textContent = "🎤 מאזין — עדיין לא שמעתי דיבור";
+        return;
+      }
+
+      if (code === "aborted") return;
 
       if (code === "not-allowed" || code === "service-not-allowed") {
         listeningWanted = false;
         recognitionRunning = false;
         setModeBadge("אין הרשאת מיקרופון", "error");
         els.mainStatus.textContent = "צריך לאשר שימוש במיקרופון";
-        els.instruction.textContent = "אפשר עדיין לבדוק את המכונית באמצעות הכפתורים הידניים.";
+        els.instruction.textContent = "פתח הרשאות אתר/אפליקציה ואשר Microphone.";
         updateListeningButtons();
+        return;
+      }
+
+      if (code === "network") {
+        els.mainStatus.textContent = "שגיאת זיהוי קול: network";
+        els.instruction.textContent = "זיהוי הדיבור של הדפדפן צריך גם חיבור אינטרנט פעיל.";
         return;
       }
 
@@ -242,7 +358,9 @@
 
     r.onend = () => {
       recognitionRunning = false;
-      scheduleRecognitionRestart(220);
+      if (listeningWanted && !document.hidden) {
+        scheduleRecognitionRestart(180);
+      }
     };
 
     return r;
@@ -253,20 +371,47 @@
     els.stopListeningButton.classList.toggle("hidden", !listeningWanted);
   }
 
+  async function verifyMicrophonePermission() {
+    if (!navigator.mediaDevices?.getUserMedia) return true;
+
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      return true;
+    } catch (error) {
+      setModeBadge("אין הרשאת מיקרופון", "error");
+      els.mainStatus.textContent = "הטלפון לא נתן גישה למיקרופון";
+      els.instruction.textContent = `Microphone: ${error?.name || "permission denied"}`;
+      return false;
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+    }
+  }
+
   async function startListening() {
     ensureAudioContext();
 
     if (!SpeechRecognition) {
       setModeBadge("לא נתמך בדפדפן", "error");
       els.mainStatus.textContent = "זיהוי קולי לא זמין כאן";
-      els.instruction.textContent = "נסה Chrome/Android או Safari/iPhone מעודכן. הכפתורים הידניים עדיין עובדים.";
+      els.instruction.textContent = "נסה Chrome באנדרואיד. הכפתורים הידניים עדיין עובדים.";
       return;
     }
+
+    els.mainStatus.textContent = "בודק מיקרופון...";
+    const micAllowed = await verifyMicrophonePermission();
+    if (!micAllowed) return;
 
     if (!recognition) recognition = createRecognition();
     listeningWanted = true;
     updateListeningButtons();
-    showWakeMode();
+    showWakeMode("🎤 המיקרופון אושר — מתחיל להאזין");
     scheduleRecognitionRestart(0);
   }
 
@@ -301,7 +446,6 @@
   }
 
   async function checkPiConnection() {
-    // Avoid stacking requests when a previous DNS/network attempt is still running.
     if (connectionCheckRunning) return false;
     connectionCheckRunning = true;
 
@@ -408,8 +552,6 @@
       return;
     }
 
-    // Re-check immediately when the user returns to the PWA. This is useful
-    // after the phone or Raspberry Pi has just joined a different Wi-Fi network.
     checkPiConnection();
     if (listeningWanted) scheduleRecognitionRestart(350);
   });
@@ -426,10 +568,8 @@
 
   els.piUrl.value = getPiUrl();
   updateListeningButtons();
-  showWakeMode("לחץ על “התחל האזנה”");
+  showWakeMode(`לחץ על “התחל האזנה” • ${APP_VERSION}`);
 
-  // Resolve mikipi.local immediately, then retry every 5 seconds while the app
-  // is visible. No numeric IP address is required if mDNS works on the network.
   checkPiConnection();
   setInterval(() => {
     if (!document.hidden) checkPiConnection();
