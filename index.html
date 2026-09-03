@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b5f4b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Tennis Car">
+  <title>Tennis Car Voice</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header>
+      <div class="brand">🚗🎾</div>
+      <div>
+        <h1>Tennis Car Voice</h1>
+        <p class="subtitle">שליטה קולית במכונית איסוף הכדורים</p>
+      </div>
+    </header>
+
+    <section class="card hero-card" aria-live="polite">
+      <div id="modeBadge" class="mode-badge waiting">ממתין להפעלה</div>
+      <div id="mainStatus" class="main-status">לחץ על “התחל האזנה”</div>
+      <div id="instruction" class="instruction">אחר כך אמור: “מכונית טניס תפעלי”</div>
+      <div id="countdown" class="countdown hidden"></div>
+      <button id="listenButton" class="primary-button" type="button">🎤 התחל האזנה</button>
+      <button id="stopListeningButton" class="secondary-button hidden" type="button">הפסק האזנה</button>
+    </section>
+
+    <section class="card">
+      <h2>מה שמעתי</h2>
+      <div id="heardText" class="heard-text">—</div>
+      <div id="lastAction" class="last-action">פקודה אחרונה: —</div>
+    </section>
+
+    <section class="card connection-card">
+      <div class="connection-row">
+        <div>
+          <h2>Raspberry Pi</h2>
+          <div id="piStatus" class="pi-status unknown"><span class="dot"></span><span>לא נבדק</span></div>
+        </div>
+        <button id="testConnectionButton" class="small-button" type="button">בדוק חיבור</button>
+      </div>
+
+      <label for="piUrl">כתובת המכונית</label>
+      <div class="url-row">
+        <input id="piUrl" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://raspberrypi.local:5000">
+        <button id="savePiUrlButton" class="small-button" type="button">שמור</button>
+      </div>
+      <p class="hint">הטלפון וה‑Raspberry Pi צריכים להיות באותה רשת Wi‑Fi.</p>
+    </section>
+
+    <section class="card">
+      <h2>בדיקה ידנית</h2>
+      <p class="hint">הכפתורים עוקפים רק את הזיהוי הקולי ושולחים בדיוק את אותן שלוש פקודות.</p>
+      <div class="command-grid">
+        <button class="command-button fetch" data-command="FETCH" type="button">🎾<span>תביא כדור</span></button>
+        <button class="command-button stop" data-command="STOP" type="button">🛑<span>עצור</span></button>
+        <button class="command-button home" data-command="HOME" type="button">🏠<span>חזור למקום</span></button>
+      </div>
+    </section>
+
+    <details class="card help-card">
+      <summary>איך משתמשים</summary>
+      <ol>
+        <li>לחץ פעם אחת על “התחל האזנה” ואשר שימוש במיקרופון.</li>
+        <li>אמור “מכונית טניס תפעלי”.</li>
+        <li>אחרי הביפ יש 7 שניות לומר “תביא כדור”, “עצור” או “חזור למקום”.</li>
+        <li>אחרי פקודה האפליקציה חוזרת להמתין למשפט ההפעלה.</li>
+      </ol>
+    </details>
+
+    <footer>V1 • Tennis Car Phone PWA</footer>
+  </main>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
