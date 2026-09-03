@@ -3,7 +3,8 @@
 
   const COMMAND_WINDOW_MS = 7000;
   const STATUS_POLL_MS = 5000;
-  const DEFAULT_PI_URL = "http://raspberrypi.local:5000";
+  const DEFAULT_PI_URL = "http://mikipi.local:5000";
+  const OLD_DEFAULT_PI_URL = "http://raspberrypi.local:5000";
 
   const WAKE_PHRASES = [
     "מכונית טניס תפעלי",
@@ -39,6 +40,7 @@
   let commandTimer = null;
   let restartTimer = null;
   let audioContext = null;
+  let connectionCheckRunning = false;
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -65,7 +67,16 @@
   }
 
   function getPiUrl() {
-    return (localStorage.getItem("tennisCarPiUrl") || DEFAULT_PI_URL).replace(/\/+$/, "");
+    let saved = String(localStorage.getItem("tennisCarPiUrl") || "").trim().replace(/\/+$/, "");
+
+    // Migrate phones that opened the first version of the PWA, whose default
+    // hostname was raspberrypi.local. A manually entered address is preserved.
+    if (!saved || saved.toLowerCase() === OLD_DEFAULT_PI_URL.toLowerCase()) {
+      saved = DEFAULT_PI_URL;
+      localStorage.setItem("tennisCarPiUrl", saved);
+    }
+
+    return saved;
   }
 
   function setPiUrl(value) {
@@ -89,7 +100,10 @@
     if (commandTimer) clearInterval(commandTimer);
     commandTimer = null;
     els.countdown.classList.add("hidden");
-    setModeBadge(listeningWanted ? "מאזין" : "ממתין להפעלה", listeningWanted ? "listening" : "waiting");
+    setModeBadge(
+      listeningWanted ? "מאזין" : "ממתין להפעלה",
+      listeningWanted ? "listening" : "waiting"
+    );
     els.mainStatus.textContent = message;
     els.instruction.textContent = "אמור: “מכונית טניס תפעלי”";
   }
@@ -121,7 +135,9 @@
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) audioContext = new AudioCtx();
     }
-    if (audioContext?.state === "suspended") audioContext.resume().catch(() => {});
+    if (audioContext?.state === "suspended") {
+      audioContext.resume().catch(() => {});
+    }
   }
 
   function beep(frequency = 880, durationMs = 100) {
@@ -144,6 +160,7 @@
   function scheduleRecognitionRestart(delayMs = 250) {
     clearTimeout(restartTimer);
     if (!listeningWanted || recognitionRunning || !recognition) return;
+
     restartTimer = setTimeout(() => {
       if (!listeningWanted || recognitionRunning) return;
       try {
@@ -171,15 +188,17 @@
     r.onresult = (event) => {
       const result = event.results[event.results.length - 1];
       const alternatives = [];
+
       for (let i = 0; i < result.length; i += 1) {
         if (result[i]?.transcript) alternatives.push(result[i].transcript.trim());
       }
-      const heard = alternatives.join(" / ");
-      els.heardText.textContent = heard || "—";
+
+      els.heardText.textContent = alternatives.join(" / ") || "—";
 
       if (appMode === "wake") {
-        const wakeMatched = alternatives.some((text) => phraseMatches(text, WAKE_PHRASES));
-        if (wakeMatched) enterCommandMode();
+        if (alternatives.some((text) => phraseMatches(text, WAKE_PHRASES))) {
+          enterCommandMode();
+        }
         return;
       }
 
@@ -257,9 +276,11 @@
     if (commandTimer) clearInterval(commandTimer);
     commandTimer = null;
     commandDeadline = 0;
+
     if (recognitionRunning && recognition) {
       try { recognition.abort(); } catch (_) {}
     }
+
     recognitionRunning = false;
     updateListeningButtons();
     showWakeMode("ההאזנה הופסקה");
@@ -267,12 +288,11 @@
 
   async function localFetch(path, options = {}) {
     const url = `${getPiUrl()}${path}`;
-    const requestOptions = {
+    return fetch(url, {
       cache: "no-store",
       ...options,
       targetAddressSpace: "local"
-    };
-    return fetch(url, requestOptions);
+    });
   }
 
   function setPiStatus(state, text) {
@@ -281,27 +301,35 @@
   }
 
   async function checkPiConnection() {
-    setPiStatus("unknown", "בודק...");
+    // Avoid stacking requests when a previous DNS/network attempt is still running.
+    if (connectionCheckRunning) return false;
+    connectionCheckRunning = true;
+
+    setPiStatus("unknown", "בודק mikipi.local...");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
+
     try {
       const response = await localFetch("/api/phone-status", { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
       const data = await response.json();
       const version = data.software_version ? ` • ${data.software_version}` : "";
-      setPiStatus("online", `מחובר${version}`);
+      setPiStatus("online", `מחובר ל-mikipi${version}`);
       return true;
     } catch (_) {
-      setPiStatus("offline", "אין חיבור");
+      setPiStatus("offline", "mikipi לא נמצא — מנסה שוב אוטומטית");
       return false;
     } finally {
       clearTimeout(timeout);
+      connectionCheckRunning = false;
     }
   }
 
   async function sendCommand(command) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
+
     try {
       const response = await localFetch("/api/phone-command", {
         method: "POST",
@@ -309,11 +337,13 @@
         body: JSON.stringify({ command }),
         signal: controller.signal
       });
+
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.ok === false) {
         throw new Error(data.error || `HTTP ${response.status}`);
       }
-      setPiStatus("online", "מחובר");
+
+      setPiStatus("online", "מחובר ל-mikipi");
       return data;
     } finally {
       clearTimeout(timeout);
@@ -340,10 +370,10 @@
       els.mainStatus.textContent = `✅ ${label}`;
       beep(command === "STOP" ? 520 : 1040, 120);
     } catch (error) {
-      setPiStatus("offline", "אין חיבור");
+      setPiStatus("offline", "אין חיבור ל-mikipi — ממשיך לנסות");
       els.lastAction.textContent = `פקודה אחרונה: ${label} — נכשלה`;
       els.mainStatus.textContent = `❌ לא הצלחתי לשלוח: ${label}`;
-      els.instruction.textContent = error?.message || "בדוק את כתובת ה‑Raspberry Pi ואת ה‑Wi‑Fi";
+      els.instruction.textContent = error?.message || "ודא שהטלפון וה-Raspberry Pi באותה רשת Wi-Fi";
       beep(240, 180);
     }
 
@@ -375,9 +405,13 @@
       if (recognitionRunning && recognition) {
         try { recognition.abort(); } catch (_) {}
       }
-    } else if (listeningWanted) {
-      scheduleRecognitionRestart(350);
+      return;
     }
+
+    // Re-check immediately when the user returns to the PWA. This is useful
+    // after the phone or Raspberry Pi has just joined a different Wi-Fi network.
+    checkPiConnection();
+    if (listeningWanted) scheduleRecognitionRestart(350);
   });
 
   window.addEventListener("online", checkPiConnection);
@@ -393,6 +427,9 @@
   els.piUrl.value = getPiUrl();
   updateListeningButtons();
   showWakeMode("לחץ על “התחל האזנה”");
+
+  // Resolve mikipi.local immediately, then retry every 5 seconds while the app
+  // is visible. No numeric IP address is required if mDNS works on the network.
   checkPiConnection();
   setInterval(() => {
     if (!document.hidden) checkPiConnection();
