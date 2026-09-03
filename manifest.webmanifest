@@ -1,0 +1,22 @@
+{
+  "name": "Tennis Car Voice Controller",
+  "short_name": "Tennis Car",
+  "description": "Hebrew voice controller for the Raspberry Pi tennis-ball collection car",
+  "lang": "he",
+  "dir": "rtl",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef5f1",
+  "theme_color": "#0b5f4b",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
