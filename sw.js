@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-car-phone-v1";
+const CACHE_NAME = "tennis-car-phone-v2-voice";
 const APP_SHELL = [
   "./",
   "./index.html",
