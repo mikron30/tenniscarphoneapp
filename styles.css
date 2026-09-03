@@ -1,0 +1,132 @@
+:root {
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background: #eef5f1;
+  color: #17211d;
+  --green: #0b5f4b;
+  --green-soft: #dff1e9;
+  --red: #b42318;
+  --red-soft: #fee4e2;
+  --amber: #8a4b08;
+  --amber-soft: #fff0d5;
+  --border: #d4dfd9;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #e9f4ef 0%, #f7faf8 35%, #eef3f0 100%);
+}
+
+button, input { font: inherit; }
+button { touch-action: manipulation; }
+
+.app-shell {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(26px + env(safe-area-inset-bottom));
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 2px 18px;
+}
+
+.brand { font-size: 42px; line-height: 1; }
+h1 { margin: 0; font-size: clamp(25px, 7vw, 36px); }
+.subtitle { margin: 4px 0 0; color: #516159; }
+
+.card {
+  background: rgba(255,255,255,.94);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(20,55,42,.07);
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+.hero-card { text-align: center; padding: 24px 18px; }
+.mode-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-weight: 800;
+  font-size: 14px;
+}
+.mode-badge.waiting { background: #e8eeeb; color: #38443e; }
+.mode-badge.listening { background: var(--green-soft); color: var(--green); }
+.mode-badge.command { background: var(--amber-soft); color: var(--amber); }
+.mode-badge.error { background: var(--red-soft); color: var(--red); }
+
+.main-status { font-size: clamp(25px, 7vw, 38px); font-weight: 850; margin: 22px 0 8px; }
+.instruction { font-size: 18px; color: #55645d; min-height: 26px; }
+.countdown { margin-top: 12px; font-size: 34px; font-weight: 900; color: var(--amber); }
+
+.primary-button, .secondary-button, .small-button, .command-button {
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 800;
+}
+.primary-button {
+  width: 100%;
+  margin-top: 20px;
+  padding: 16px;
+  color: white;
+  background: var(--green);
+  font-size: 20px;
+}
+.secondary-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 13px;
+  background: #e9eeeb;
+  color: #26332d;
+}
+.small-button { padding: 11px 14px; background: #e8efeb; color: #24342d; white-space: nowrap; }
+
+h2 { font-size: 19px; margin: 0 0 12px; }
+.heard-text { min-height: 44px; padding: 11px 12px; border-radius: 12px; background: #f3f7f5; font-size: 20px; font-weight: 700; }
+.last-action { margin-top: 11px; color: #536159; }
+
+.connection-row, .url-row { display: flex; align-items: center; gap: 10px; }
+.connection-row { justify-content: space-between; margin-bottom: 14px; }
+.connection-row h2 { margin-bottom: 7px; }
+.url-row input {
+  direction: ltr;
+  text-align: left;
+  min-width: 0;
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #bbc9c1;
+  border-radius: 12px;
+  background: white;
+}
+label { display: block; font-weight: 750; margin-bottom: 7px; }
+.hint { color: #64736b; font-size: 14px; line-height: 1.45; margin: 10px 0 0; }
+
+.pi-status { display: flex; align-items: center; gap: 7px; font-weight: 750; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: #929e98; }
+.pi-status.online .dot { background: #16a34a; box-shadow: 0 0 0 4px #dcfce7; }
+.pi-status.offline .dot { background: #dc2626; box-shadow: 0 0 0 4px #fee2e2; }
+
+.command-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; margin-top: 15px; }
+.command-button { min-height: 92px; padding: 12px 8px; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; font-size: 27px; }
+.command-button span { font-size: 15px; }
+.command-button.fetch { background: var(--green-soft); color: var(--green); }
+.command-button.stop { background: var(--red-soft); color: var(--red); }
+.command-button.home { background: #e8eefc; color: #284f9e; }
+
+.help-card summary { font-weight: 850; cursor: pointer; }
+.help-card ol { padding-right: 22px; line-height: 1.7; }
+footer { text-align: center; color: #78857f; font-size: 13px; padding: 6px; }
+.hidden { display: none !important; }
+
+@media (max-width: 390px) {
+  .command-grid { grid-template-columns: 1fr; }
+  .command-button { min-height: 62px; flex-direction: row; }
+}
