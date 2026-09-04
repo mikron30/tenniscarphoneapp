@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "V2 VOICE DEBUG";
+  const APP_VERSION = "V3 HIT COMMUNICATION TEST";
   const COMMAND_WINDOW_MS = 7000;
   const STATUS_POLL_MS = 5000;
   const DEFAULT_PI_URL = "http://mikipi.local:5000";
@@ -24,13 +24,23 @@
       "תביא כדור טניס",
       "תביאי כדור טניס"
     ],
+    HIT: [
+      "תפגע בכדור",
+      "תפגעי בכדור",
+      "פגע בכדור",
+      "פגעי בכדור",
+      "תפגע בכדור טניס",
+      "תפגעי בכדור טניס"
+    ],
     STOP: ["עצור", "עצרי", "סטופ"],
     HOME: [
       "חזור למקום",
       "תחזור למקום",
       "חזרי למקום",
       "חזרה למקום",
-      "תחזרי למקום"
+      "תחזרי למקום",
+      "חזור הביתה",
+      "תחזור הביתה"
     ]
   };
 
@@ -85,20 +95,10 @@
   function matchesWakePhrase(text) {
     if (phraseMatches(text, WAKE_PHRASES)) return true;
 
-    // Hebrew speech recognition often returns a grammatically different
-    // inflection than the exact phrase that was spoken. Keep the wake phrase
-    // semantically strict (car + tennis + activation), but tolerate those
-    // normal recognition variants.
     const hasCar = containsAny(text, ["מכונית", "מכונת", "מכונה"]);
     const hasTennis = containsAny(text, ["טניס"]);
     const hasActivation = containsAny(text, [
-      "תפעלי",
-      "תפעילי",
-      "תפעל",
-      "תפעיל",
-      "הפעלי",
-      "תתחילי",
-      "תתחיל"
+      "תפעלי", "תפעילי", "תפעל", "תפעיל", "הפעלי", "תתחילי", "תתחיל"
     ]);
 
     return hasCar && hasTennis && hasActivation;
@@ -108,14 +108,15 @@
     if (phraseMatches(text, COMMAND_PHRASES.STOP)) return "STOP";
 
     const normalized = normalizeText(text);
-
-    // FETCH: require both the action and the word ball, so ordinary tennis
-    // conversation does not accidentally trigger the car.
     const hasBall = normalized.includes("כדור");
+
+    // HIT is checked before FETCH because both intentionally mention a ball.
+    const hasHitVerb = containsAny(normalized, ["תפגע", "תפגעי", "פגע", "פגעי"]);
+    if (hasBall && hasHitVerb) return "HIT";
+
     const hasFetchVerb = containsAny(normalized, ["תביא", "תביאי", "הביאי", "הבא"]);
     if (hasBall && hasFetchVerb) return "FETCH";
 
-    // HOME: require both a return word and place/home word.
     const hasPlace = containsAny(normalized, ["מקום", "הביתה", "בית"]);
     const hasReturnVerb = containsAny(normalized, ["חזור", "תחזור", "תחזרי", "חזרי", "חזרה"]);
     if (hasPlace && hasReturnVerb) return "HOME";
@@ -128,7 +129,9 @@
   }
 
   function getPiUrl() {
-    let saved = String(localStorage.getItem("tennisCarPiUrl") || "").trim().replace(/\/+$/, "");
+    let saved = String(localStorage.getItem("tennisCarPiUrl") || "")
+      .trim()
+      .replace(/\/+$/, "");
 
     if (!saved || saved.toLowerCase() === OLD_DEFAULT_PI_URL.toLowerCase()) {
       saved = DEFAULT_PI_URL;
@@ -153,6 +156,10 @@
     els.modeBadge.className = `mode-badge ${className}`;
   }
 
+  function commandInstruction() {
+    return "תביא כדור • תפגע בכדור • עצור • חזור למקום";
+  }
+
   function showWakeMode(message = "ממתין ל־“מכונית טניס תפעלי”") {
     appMode = "wake";
     commandDeadline = 0;
@@ -175,12 +182,10 @@
     commandDeadline = Date.now() + COMMAND_WINDOW_MS;
     setModeBadge("ממתין לפקודה", "command");
     els.mainStatus.textContent = "✅ שמעתי את משפט ההפעלה — דבר אחרי הביפ";
-    els.instruction.textContent = "תביא כדור • עצור • חזור למקום";
+    els.instruction.textContent = commandInstruction();
     els.countdown.classList.remove("hidden");
     beep(880, 100);
 
-    // Start the command window with a fresh recognition session. This avoids
-    // the tail of the wake phrase being interpreted as the command.
     if (recognitionRunning && recognition) {
       setTimeout(() => {
         try { recognition.abort(); } catch (_) {}
@@ -286,9 +291,6 @@
         els.heardText.textContent = `${prefix}${alternatives.join(" / ")}`;
 
         if (appMode === "wake") {
-          // Wake phrase may be acted on even from an interim transcript. This
-          // makes activation much faster and avoids waiting for Chrome to end
-          // the utterance before opening the command window.
           if (alternatives.some(matchesWakePhrase)) {
             enterCommandMode();
             return;
@@ -301,8 +303,7 @@
           return;
         }
 
-        // Actual car commands are executed only on FINAL recognition results.
-        // That prevents an unstable interim transcript from moving the car.
+        // Car commands are sent only from FINAL speech results.
         if (!result.isFinal) continue;
 
         let command = null;
@@ -313,7 +314,7 @@
 
         if (!command) {
           els.mainStatus.textContent = "שמעתי, אבל לא זיהיתי פקודה — נסה שוב";
-          els.instruction.textContent = "תביא כדור • עצור • חזור למקום";
+          els.instruction.textContent = commandInstruction();
           beep(430, 80);
           continue;
         }
@@ -400,7 +401,7 @@
     if (!SpeechRecognition) {
       setModeBadge("לא נתמך בדפדפן", "error");
       els.mainStatus.textContent = "זיהוי קולי לא זמין כאן";
-      els.instruction.textContent = "נסה Chrome באנדרואיד. הכפתורים הידניים עדיין עובדים.";
+      els.instruction.textContent = "הכפתורים הידניים עדיין עובדים.";
       return;
     }
 
@@ -484,7 +485,7 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.ok === false) {
-        throw new Error(data.error || `HTTP ${response.status}`);
+        throw new Error(data.error || data.result || `HTTP ${response.status}`);
       }
 
       setPiStatus("online", "מחובר ל-mikipi");
@@ -497,6 +498,7 @@
   function commandHebrew(command) {
     return {
       FETCH: "תביא כדור",
+      HIT: "תפגע בכדור",
       STOP: "עצור",
       HOME: "חזור למקום"
     }[command] || command;
