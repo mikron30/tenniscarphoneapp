@@ -114,10 +114,11 @@ label { display: block; font-weight: 750; margin-bottom: 7px; }
 .pi-status.online .dot { background: #16a34a; box-shadow: 0 0 0 4px #dcfce7; }
 .pi-status.offline .dot { background: #dc2626; box-shadow: 0 0 0 4px #fee2e2; }
 
-.command-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; margin-top: 15px; }
+.command-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; margin-top: 15px; }
 .command-button { min-height: 92px; padding: 12px 8px; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; font-size: 27px; }
 .command-button span { font-size: 15px; }
 .command-button.fetch { background: var(--green-soft); color: var(--green); }
+.command-button.hit { background: var(--amber-soft); color: var(--amber); }
 .command-button.stop { background: var(--red-soft); color: var(--red); }
 .command-button.home { background: #e8eefc; color: #284f9e; }
 
@@ -127,6 +128,6 @@ footer { text-align: center; color: #78857f; font-size: 13px; padding: 6px; }
 .hidden { display: none !important; }
 
 @media (max-width: 390px) {
-  .command-grid { grid-template-columns: 1fr; }
-  .command-button { min-height: 62px; flex-direction: row; }
+  .command-grid { grid-template-columns: 1fr 1fr; }
+  .command-button { min-height: 72px; }
 }
