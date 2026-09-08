@@ -3,6 +3,7 @@
 
   const nativeFetch = window.fetch.bind(window);
   const DISCOVERY_ORIGINS = [
+    "http://10.42.0.1:5000",
     "http://mikipi.local:5000",
     "http://mikipi:5000"
   ];
@@ -65,8 +66,6 @@
       const candidate = `${origin}${parsed.pathname}${parsed.search}`;
       try {
         const response = await fetchAttempt(candidate, init, DISCOVERY_ATTEMPT_MS);
-        // Any HTTP response proves that this is a reachable web server.  The
-        // normal application still decides whether the response itself is OK.
         localStorage.setItem("tennisCarPiUrl", origin);
         localStorage.setItem("tennisCarLastWorkingPiUrl", origin);
         const inputBox = document.getElementById("piUrl");
@@ -82,16 +81,16 @@
 
   window.addEventListener("DOMContentLoaded", () => {
     const footer = document.querySelector("footer");
-    if (footer) footer.textContent = "V4 AUTO NETWORK DISCOVERY • Tennis Car Phone PWA";
+    if (footer) footer.textContent = "V5 DIRECT WIFI FALLBACK • Tennis Car Phone PWA";
 
     const hint = document.querySelector(".connection-card .hint");
     if (hint) {
-      hint.textContent = "האפליקציה מנסה אוטומטית את הכתובת האחרונה, mikipi.local ו-mikipi. הטלפון והמכונית צריכים להיות באותה רשת Wi‑Fi.";
+      hint.textContent = "במצב Direct Wi‑Fi התחבר לרשת TennisCar. האפליקציה מנסה אוטומטית 10.42.0.1, mikipi.local, mikipi והכתובת האחרונה שעבדה.";
     }
 
     const status = document.getElementById("mainStatus");
     if (status && status.textContent.includes("V3 HIT COMMUNICATION TEST")) {
-      status.textContent = status.textContent.replace("V3 HIT COMMUNICATION TEST", "V4 AUTO NETWORK DISCOVERY");
+      status.textContent = status.textContent.replace("V3 HIT COMMUNICATION TEST", "V5 DIRECT WIFI FALLBACK");
     }
   });
 })();
