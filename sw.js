@@ -1,8 +1,9 @@
-const CACHE_NAME = "tennis-car-phone-v3-hit-test";
+const CACHE_NAME = "tennis-car-phone-v4-network-discovery";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
+  "./network-bootstrap.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icon.svg"
