@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-car-phone-v4-network-discovery";
+const CACHE_NAME = "tennis-car-phone-v5-direct-wifi";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -28,7 +28,6 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
 
-  // Never intercept calls to the Raspberry Pi or any other origin.
   if (requestUrl.origin !== self.location.origin) return;
 
   event.respondWith(
