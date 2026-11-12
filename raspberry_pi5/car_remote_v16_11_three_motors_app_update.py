@@ -336,9 +336,15 @@ def software_update():
         ast.parse(source, filename=name)
         if "SOFTWARE_VERSION" not in source or "Flask" not in source:
             raise ValueError("This does not look like Tennis Car software")
-        import re
-        match = re.search(r'^\\s*SOFTWARE_VERSION\\s*=\\s*["\\\']([^"\\\']+)', source, re.M)
-        new_version = match.group(1) if match else None
+        tree = ast.parse(source)
+        new_version = None
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "SOFTWARE_VERSION" for t in node.targets
+            ):
+                if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                    new_version = node.value.value
+                break
         if not new_version:
             raise ValueError("Missing SOFTWARE_VERSION in uploaded Python file")
         current = Path(__file__).resolve()
